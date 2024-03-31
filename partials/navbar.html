@@ -1,0 +1,18 @@
+{{define "navbar"}}
+<header>
+  <nav>
+    <ul>
+      {{ if .User }}
+      <li><a href="/profile">{{ .User.Username }}</a></li>
+      <li>
+        <form action="/logout" method="post">
+          <input type="submit" name="logout" value="Logout" />
+        </form>
+      </li>
+      {{ else }}
+      <li><a href="/login">Log In</a></li>
+      {{ end }}
+    </ul>
+  </nav>
+</header>
+{{end}}

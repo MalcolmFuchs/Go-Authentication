@@ -1,10 +1,9 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -18,25 +17,18 @@ func main() {
 	http.ListenAndServe(":8080", nil)
 }
 
-var users = map[string]string{
-	"Jonas":   "YummyBBC",
-	"Malcolm": "JonasYouOkay?",
-}
-
-var sessions = map[string]session{}
+var (
+	mutex    sync.Mutex
+	sessions = map[string]session{}
+	users    = map[string]string{
+		"Jonas":   "YummyBBC",
+		"Malcolm": "JonasYouOkay?",
+	}
+)
 
 type session struct {
 	id     string
 	expiry time.Time
-}
-
-func genToken() string {
-	tokenLength := 16
-
-	token := make([]byte, tokenLength)
-	rand.Read(token)
-
-	return base64.URLEncoding.EncodeToString(token)
 }
 
 func (s session) isExpired() bool {
@@ -44,6 +36,9 @@ func (s session) isExpired() bool {
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
+
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	err := r.ParseForm()
 	if err != nil {
@@ -56,7 +51,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	if pw, ok := users[username]; ok {
 
-		sessionToken := genToken()
+		sessionToken := component.genToken()
 		expiresAt := time.Now().Add(120 * time.Second)
 
 		if password == pw {
@@ -84,6 +79,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	c, err := r.Cookie("session_token")
 	if err != nil {
 		if err == http.ErrNoCookie {
@@ -109,6 +108,10 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func RefreshToken(w http.ResponseWriter, r *http.Request) {
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	c, err := r.Cookie("session_token")
 	if err != nil {
 		if err == http.ErrNoCookie {
@@ -151,6 +154,10 @@ func RefreshToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func CheckForToken(w http.ResponseWriter, r *http.Request) {
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	c, err := r.Cookie("session_token")
 	if err != nil {
 		if err == http.ErrNoCookie {

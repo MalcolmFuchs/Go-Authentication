@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"sync"
@@ -35,6 +37,14 @@ func (s session) isExpired() bool {
 	return s.expiry.Before(time.Now())
 }
 
+func genToken() string {
+
+	token := make([]byte, 16)
+	rand.Read(token)
+	return base64.URLEncoding.EncodeToString(token)
+
+}
+
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	mutex.Lock()
@@ -51,7 +61,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	if pw, ok := users[username]; ok {
 
-		sessionToken := component.genToken()
+		sessionToken := genToken()
 		expiresAt := time.Now().Add(120 * time.Second)
 
 		if password == pw {

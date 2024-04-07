@@ -75,7 +75,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.PostForm.Get("username")
 	password := r.PostForm.Get("password")
 
-	if pw, _ := users[username]; password == pw {
+	if pw := users[username]; password == pw {
 		cookie := CookieJar.CreateSession(username, pw)
 
 		http.SetCookie(w, &cookie)
@@ -90,73 +90,46 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 func (sessionStorage *SessionStorage) HasActiveSession(token string) bool {
 	expiry := sessionStorage.sessions[token].expiry
-	if time.Now().After(expiry) {
-		return false
-	}
-	return true
+	return !time.Now().After(expiry)
 }
 
-func (sessionStorage *SessionStorage) RefreshSession(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("session_token")
-	if err != nil {
-		if err == http.ErrNoCookie {
-			http.Error(w, "No cookie set", http.StatusUnauthorized)
-			return
-		}
-		http.Error(w, "No cookie found", http.StatusBadRequest)
-		return
-	}
+func (sessionStorage *SessionStorage) DeleteSession(w http.ResponseWriter, token string) {
 
-	sessionToken := c.Value
-	userSession, ok := sessions[sessionToken]
-	if !ok {
-		http.Error(w, "Not logged in", http.StatusUnauthorized)
-		return
-	}
+	delete(sessionStorage.sessions, token)
 
-	if userSession.isExpired() {
-		delete(sessions, sessionToken)
-		http.Error(w, "User session expired", http.StatusUnauthorized)
-		return
-	}
-
-	newSessionToken := sessionsStorage.generateToken()
-	expiresAt := time.Now().Add(120 * time.Second)
-
-	sessions[newSessionToken] = session{
-		id:     userSession.id,
-		expiry: expiresAt,
-	}
-
-	delete(sessions, sessionToken)
-
-	http.SetCookie(w, &http.Cookie{
-		Name:    "session_token",
-		Value:   newSessionToken,
-		Expires: time.Now().Add(120 * time.Second),
-	})
-}
-
-func (sessionStorage *SessionStorage) DeleteSession(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("session_token")
-	if err != nil {
-		if err == http.ErrNoCookie {
-			http.Error(w, "no Cookie found", http.StatusUnauthorized)
-			return
-		}
-		http.Error(w, "user not found", http.StatusBadRequest)
-		return
-	}
-
-	sessionToken := c.Value
-
-	delete(sessions, sessionToken)
-
-	http.SetCookie(w, &http.Cookie{
+	deletedCookie := http.Cookie{
 		Name:    "session_token",
 		Value:   "",
 		Expires: time.Now(),
-	})
+		// Secure:   true,
+		MaxAge:   0,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
+	http.SetCookie(w, &deletedCookie)
 
-	w.Write([]byte("Logged Out successfully"))
+	w.Write([]byte("Session deleted successfully!"))
+
+}
+
+func (sessionStorage *SessionStorage) RefreshSession(w http.ResponseWriter, token string) http.Cookie {
+
+	if !sessionStorage.HasActiveSession(token) {
+		http.Error(w, "No valid cookie found", http.StatusUnauthorized)
+		sessionStorage.DeleteSession(w, token)
+	}
+
+	newToken := sessionStorage.generateToken()
+	expiresAt := time.Now().Add(120 * time.Second)
+
+	cookie := http.Cookie{
+		Name:    "session_token",
+		Value:   newToken,
+		Expires: expiresAt,
+		// Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
+
+	return cookie
 }
